@@ -12,7 +12,7 @@ from eltdx._bar_time import (
     kline_period_minutes,
 )
 from eltdx.protocol.constants import MAX_KLINE_PAGE_SIZE
-from eltdx.protocol.unit import normalize_code
+from eltdx.protocol.unit import NON_OHLC_PERIOD_ALIASES, normalize_code
 
 from .base import ApiBase
 
@@ -43,6 +43,16 @@ class BarApi(ApiBase):
                 bar 右端点（= 开始 + 周期时长，与 Tushare/同花顺对齐，上午最后一根标
                 ``11:30``）。仅对分钟级周期生效；日线及以上不受影响。
         """
+        if not isinstance(period, str):
+            raise TypeError(f"period must be a string, got {type(period).__name__}")
+        # 协议层（unit.rs 的 Period::normalize）把 category 22 映射成历史资金流，
+        # 接受 flow / fund_flow / zjlx 三个别名且做 to_lowercase()。这里必须用同一套
+        # 别名 + 同样的规范化，否则换个写法就绕过检查、继续走 7709 K 线请求。
+        if period.strip().lower() in NON_OHLC_PERIOD_ALIASES:
+            raise ValueError(
+                f"period={period!r} is not OHLC data; "
+                "use client.money_flow.history(code, days=...) instead"
+            )
 
         _validate_batch_size(batch_size)
         if not all_pages:
